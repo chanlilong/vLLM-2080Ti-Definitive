@@ -1,0 +1,29 @@
+# Build context rules for docker/sm75-airgap/Dockerfile (BuildKit uses this
+# file instead of the repository-root .dockerignore).
+.git
+/.venv
+/.deps
+/build
+/build-logs
+/run-logs
+/results
+/backups
+/triton-cache
+/torchinductor-cache
+/.cache
+/airgap-bundle
+/dist
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+vllm/*.so
+vllm/vllm-rs
+rust/target
+cmake-build-*
+
+# Host-side helpers and build files are not needed inside the image
+/DEPLOY-AIRGAPPED-2xTITAN-RTX.md
+/docker/sm75-airgap/Dockerfile
+/docker/sm75-airgap/Dockerfile.dockerignore
+/docker/sm75-airgap/stage.sh
+/docker/sm75-airgap/run.sh

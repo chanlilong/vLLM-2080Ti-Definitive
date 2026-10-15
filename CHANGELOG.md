@@ -2,6 +2,29 @@
 
 This changelog tracks releases of vLLM 2080 Ti Definitive Edition separately from upstream vLLM releases.
 
+## Unreleased
+
+### Airgapped Docker packaging (experimental)
+
+Adds `docker/sm75-airgap/`: an Ubuntu 26.04 / CUDA 13.0 image that runs
+`build.sh` on an online staging machine, plus a bundler for the image, model
+and offline host packages, a container entrypoint, a host `run.sh`, and two
+experimental 2x TITAN RTX profiles that are not part of the validated matrix.
+See `DEPLOY-AIRGAPPED-2xTITAN-RTX.md`. The image build and launcher
+configuration were verified without GPUs. GPU serving on TITAN RTX has not been
+benchmarked.
+
+### Build fixes
+
+- `build.sh` installs torch through uv's cu130 backend when a fresh venv uses
+  the official package route. Previously the `--no-build-isolation` vLLM
+  install failed with `No module named 'torch'`.
+- `build.sh` compiles the FlashQLA SM75 extension on build hosts without a
+  visible GPU, such as container builds.
+- Fixed the first hunk header of
+  `toolchain-patches/cuda-13.0-glibc-2.41-rsqrt.patch`. GNU patch rejected it
+  as malformed.
+
 ## v0.2.2-post3 - 2026-10-01
 
 Patch release following `v0.2.2-post2`.

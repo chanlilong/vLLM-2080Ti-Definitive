@@ -348,7 +348,16 @@ run_build_network_preflight() {
 }
 
 install_torch_from_mirror() {
-  [[ -n "$BUILD_TORCH_INDEX" ]] || return 0
+  if [[ -z "$BUILD_TORCH_INDEX" ]]; then
+    # The vLLM install below uses --no-build-isolation, so a fresh venv on the
+    # official package route needs torch before setup.py runs.
+    if ! "$python_bin" -c 'import torch' >/dev/null 2>&1; then
+      echo "Installing Torch ${PRIMARY_TORCH_VERSION} with uv torch backend $cuda_backend"
+      uv pip install --python "$python_bin" "--torch-backend=$cuda_backend" \
+        "torch==${PRIMARY_TORCH_VERSION}"
+    fi
+    return 0
+  fi
   echo "Installing Torch/Triton from mirror: $BUILD_TORCH_INDEX"
   uv pip install --python "$python_bin" \
     --index-url "$BUILD_TORCH_INDEX" \
@@ -469,8 +478,14 @@ prepare_flashqla_sm75() {
   TORCH_EXTENSIONS_DIR="$extension_dir" \
   PYTHONPATH="$flashqla_dir${PYTHONPATH:+:$PYTHONPATH}" \
     "$python_bin" - <<'PY'
+import torch
 from flash_qla.ops.gated_delta_rule.legacy.sm_legacy import _load_ext
 
+if not torch.cuda.is_available():
+    # GPU-less build host (for example a container build): the extension
+    # only needs nvcc and TORCH_CUDA_ARCH_LIST to compile.
+    print("No CUDA device visible; compiling FlashQLA for TORCH_CUDA_ARCH_LIST")
+    torch.cuda.is_available = lambda: True
 extension = _load_ext()
 required = ("gdn_forward", "gdn_forward_varlen")
 missing = [name for name in required if not hasattr(extension, name)]
@@ -587,6 +602,8 @@ if torch.cuda.is_available():
 if os.environ.get("FLASHQLA_ENABLED") == "1":
     from flash_qla.ops.gated_delta_rule.legacy.sm_legacy import _load_ext
 
+    if not torch.cuda.is_available():
+        torch.cuda.is_available = lambda: True
     extension = _load_ext()
     required = ("gdn_forward", "gdn_forward_varlen")
     missing = [name for name in required if not hasattr(extension, name)]
