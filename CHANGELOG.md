@@ -6,13 +6,15 @@ This changelog tracks releases of vLLM 2080 Ti Definitive Edition separately fro
 
 ### Airgapped Docker packaging (experimental)
 
-Adds `docker/sm75-airgap/`: an Ubuntu 26.04 / CUDA 13.0 image that runs
-`build.sh` on an online staging machine, plus a bundler for the image, model
-and offline host packages, a container entrypoint, a host `run.sh`, and two
+Adds `docker/sm75-airgap/`: a CUDA 13.0 image on NVIDIA's
+`cuda:13.0.3-devel-ubuntu22.04` base (GCC 11, not the validated Ubuntu 26.04 /
+GCC 15 host) that runs `build.sh` on an online build machine, a container
+entrypoint, a `compose.yaml` that mounts the model weights read-only and puts
+`qwen38-effort-proxy` (forced `medium` thinking effort) in front of vLLM, and two
 experimental 2x TITAN RTX profiles that are not part of the validated matrix.
-See `DEPLOY-AIRGAPPED-2xTITAN-RTX.md`. The image build and launcher
-configuration were verified without GPUs. GPU serving on TITAN RTX has not been
-benchmarked.
+Deployment is the two images plus the weights. See
+`DEPLOY-AIRGAPPED-2xTITAN-RTX.md`. The image build and launcher configuration
+were verified without GPUs. GPU serving on TITAN RTX has not been benchmarked.
 
 ### Build fixes
 

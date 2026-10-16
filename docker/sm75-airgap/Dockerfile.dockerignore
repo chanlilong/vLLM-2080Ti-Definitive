@@ -11,7 +11,9 @@
 /triton-cache
 /torchinductor-cache
 /.cache
-/airgap-bundle
+/models
+/vllm-def-sm75_*.tar.gz
+/qwen38-proxy_*.tar.gz
 /dist
 **/__pycache__
 **/*.py[cod]
@@ -25,5 +27,4 @@ cmake-build-*
 /DEPLOY-AIRGAPPED-2xTITAN-RTX.md
 /docker/sm75-airgap/Dockerfile
 /docker/sm75-airgap/Dockerfile.dockerignore
-/docker/sm75-airgap/stage.sh
-/docker/sm75-airgap/run.sh
+/docker/sm75-airgap/compose.yaml

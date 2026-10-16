@@ -1,0 +1,95 @@
+# vLLM 2080 Ti Definitive Edition - airgapped 2x TITAN RTX service.
+# Based on upstream vLLM and vLLM 2080 Ti Definitive Edition (github.com/weicj).
+#
+#   docker compose up -d          start (first start compiles GPU kernels)
+#   docker compose logs -f vllm   wait for "START OK"
+#   docker compose down           stop and remove
+#
+# Two containers from two images, plus the model weights on the host:
+#   vllm   the model server, published on loopback :8000 for debugging only
+#   proxy  qwen38-effort-proxy on :8080 - the only port clients should use. It
+#          rewrites every incoming thinking-effort field to FORCE_EFFORT.
+services:
+  vllm:
+    image: vllm-def-sm75:0.2.2-post3
+    container_name: vllm-def
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Model weights: host directory -> /models/<name> in the container (read-only).
+      - ${MODEL_DIR:-/srv/models/Qwen3.8-27B-NVFP4}:/models/Qwen3.8-27B-NVFP4:ro
+      # Compiled kernel caches and logs, kept across restarts and re-creates.
+      - vllm-logs:/opt/vllm-def/run-logs
+      - vllm-triton:/opt/vllm-def/triton-cache
+      - vllm-inductor:/opt/vllm-def/torchinductor-cache
+      - vllm-cache:/opt/vllm-def/.cache
+      - vllm-root-cache:/root/.cache
+    # environment:
+    #   VLLM_API_KEY: change-me      # require "Authorization: Bearer change-me"
+    #   SKIP_STARTUP_SMOKE: "1"      # needed with an API key (the smoke test sends none)
+    command:
+      - serve
+      - --model-dir=/models/Qwen3.8-27B-NVFP4
+      - --served-name=Qwen3.8-27B-NVFP4
+      # Route profile (pick one):
+      # YaRN: 1 user x 524K, FP8 KV, no MTP. Validated on 2x 2080 Ti 22 GB.
+      - --profile-file=/opt/vllm-def/profiles/2x2080Ti/qwen27b/w4a16/yarn-fp8kv-1x524K-text-only.env
+      # 3 users x 262K native context, TurboQuant 4-bit KV, MTP4 (experimental):
+      # - --profile-file=/opt/vllm-def/docker/sm75-airgap/profiles/2xTITANRTX-nvfp4-mtp4-tq4nc-3x262K-text-only.env
+      # 8 users x 49K, FP8 KV, MTP4 (experimental):
+      # - --profile-file=/opt/vllm-def/docker/sm75-airgap/profiles/2xTITANRTX-nvfp4-mtp4-fp8kv-8x49K-text-only.env
+      # Tool calling (needed by Claude Code and agent clients); parser qwen3_xml.
+      - --enable-auto-tool-choice=1
+      - --gpu-devices=0,1
+      - --tp-size=2
+      - --pp-size=1
+      # Listen on all container interfaces so the proxy can reach vLLM; the host
+      # port above stays loopback-only.
+      - --service-scope=lan
+      - --port=8000
+      - --start-timeout=3600
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]   # host GPUs; the container sees them as 0,1
+              capabilities: [gpu]
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    stop_grace_period: 90s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # The first start compiles GPU kernels; do not mark it unhealthy meanwhile.
+      start_period: 3600s
+
+  proxy:
+    image: qwen38-proxy:local
+    container_name: qwen38-proxy
+    restart: unless-stopped
+    environment:
+      UPSTREAM_BASE_URL: http://vllm:8000
+      FORCE_EFFORT: medium          # every incoming effort becomes "medium"
+      THINKING_MODE: strip          # drop Anthropic "thinking" blocks; thinking stays on
+      INJECT_EFFORT: "true"         # add effort to Anthropic requests that omit it
+      LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"
+    # service_started, not service_healthy: otherwise `up -d` blocks through the
+    # first-start kernel compile. Until vLLM is ready the proxy returns errors.
+    depends_on:
+      vllm:
+        condition: service_started
+
+volumes:
+  vllm-logs:
+  vllm-triton:
+  vllm-inductor:
+  vllm-cache:
+  vllm-root-cache:
